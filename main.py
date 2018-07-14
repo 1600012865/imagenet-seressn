@@ -9,9 +9,9 @@ from dataset import *
 from torch.backends import cudnn
 import os
 import sys
-from senet1 import se_resnext50_32x4d
+from senetsn import se_resnext50_32x4d
 from utils import ColorAugmentation
-
+from datetime import datetime
 
 batch_size = 128
 epoch = 100
@@ -26,7 +26,7 @@ train_transforms = transforms.Compose([
                                     transforms.RandomCrop(224),
                                     transforms.RandomHorizontalFlip(),
                                     transforms.ToTensor(),
-                                    #ColorAugmentation(),
+                                    ColorAugmentation(),
                                     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229                                                         ,0.224,0.225]),
                                    ])
 valid_transforms = transforms.Compose([
@@ -52,25 +52,25 @@ net = se_resnext50_32x4d(pretrained=None)
 if load_model:
   net.load_state_dict(torch.load(load_path))
 
-optimizer = torch.optim.Adam(net.parameters(),lr=learning_rate)
-#optimizer = torch.optim.SGD(net.parameters(), lr=learning_rate, momentum=0.9, weight_decay=1e-4)
-#scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
+optimizer = torch.optim.SGD(net.parameters(), lr=learning_rate, momentum=0.9, weight_decay=1e-4)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
 
 net = nn.DataParallel(net,device_ids=[0,1,2,3])
 criterion  = torch.nn.CrossEntropyLoss()
-#cudnn.benchmark = True
+cudnn.benchmark = True
 net = net.cuda()
 criterion = criterion.cuda()
  
 best_acc = 0
 
-for step in range(epoch): 
+for step in range(epoch):
+    pre_time = datetime.now() 
     epoch_loss = 0.0
     running_loss = 0.0
     net.train()
     total = 0
+    scheduler.step()
     for i, data in enumerate(trainloader, 0): 
-        #scheduler.step()
         total += 1 
         inputs, labels = data[0].cuda(), data[1].cuda()
         optimizer.zero_grad() 
@@ -78,19 +78,25 @@ for step in range(epoch):
         loss = criterion(outputs,labels)
         loss.backward() 
         optimizer.step() 
-        print(loss)
         running_loss += float(loss)
         epoch_loss += float(loss)
-        if i % 1000 == 999: 
-            print('[%d, %5d] loss: %.3f' % (step+1, i+1, running_loss / 1000))
+        if i % 1000 == 999:
+            cur_time = datetime.now()
+            h, remainder = divmod((cur_time - prev_time).seconds, 3600)
+            m, s = divmod(remainder, 60) 
+            print('[%d, %5d] loss: %.3f {:.0f}:{:.0f}:{:.0f}' % (step+1, i+1, running_loss / 1000, h, m, s))
+            pre_time = datetime.now()
             running_loss = 0.0
     if step % 1 == 0:
-        
+        pre_time = datetime.now()
         net.eval()
         test_acc,test_loss = test(net,testloader,criterion)
-        
-        print('test_accuracy and loss in epoch %d : %.3f %.3f'%(step,test_acc,test_loss))
-        print('epoch_loss in epoch %d : %.3f'%(step,epoch_loss/total))     
+        cur_time = datetime.now()
+        h, remainder = divmod((cur_time - prev_time).seconds, 3600)
+        m, s = divmod(remainder, 60)
+         
+        print('test_accuracy and loss in epoch %d : %.3f %.3f {:.0f}:{:.0f}:{:.0f}'%(step,test_acc,test_loss, h, m, s))
+        #print('epoch_loss in epoch %d : %.3f'%(step,epoch_loss/total))     
         if best_acc <= test_acc:
             best_acc = test_acc
             torch.save(net.state_dict(),os.path.join(save_path,net_name+'_acc.pkl'))

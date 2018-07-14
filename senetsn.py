@@ -190,14 +190,14 @@ class SEResNeXtBottleneck(Bottleneck):
                  downsample=None, base_width=4):
         super(SEResNeXtBottleneck, self).__init__()
         width = math.floor(planes * (base_width / 64)) * groups
-        self.conv1 = nn.Conv2d(inplanes, width, kernel_size=1, bias=False,
+        self.conv1 = nn.Conv2d(inplanes, width, kernel_size=1, bias=True,
                                stride=1)
-        self.bn1 = nn.BatchNorm(width)
+        self.bn1 = SwitchNorm(width)
         self.conv2 = nn.Conv2d(width, width, kernel_size=3, stride=stride,
-                               padding=1, groups=groups, bias=False)
-        self.bn2 = nn.BatchNorm(width)
-        self.conv3 = nn.Conv2d(width, planes * 4, kernel_size=1, bias=False)
-        self.bn3 = nn.BatchNorm(planes * 4)
+                               padding=1, groups=groups, bias=True)
+        self.bn2 = SwitchNorm(width)
+        self.conv3 = nn.Conv2d(width, planes * 4, kernel_size=1, bias=True)
+        self.bn3 = SwitchNorm(planes * 4)
         self.relu = nn.ReLU(inplace=True)
         self.se_module = SEModule(planes * 4, reduction=reduction)
         self.downsample = downsample
@@ -257,23 +257,23 @@ class SENet(nn.Module):
         if input_3x3:
             layer0_modules = [
                 ('conv1', nn.Conv2d(3, 64, 3, stride=2, padding=1,
-                                    bias=False)),
-                ('bn1', nn.BatchNorm(64)),
+                                    bias=True)),
+                ('bn1', SwitchNorm(64)),
                 ('relu1', nn.ReLU(inplace=True)),
                 ('conv2', nn.Conv2d(64, 64, 3, stride=1, padding=1,
-                                    bias=False)),
-                ('bn2', nn.BatchNorm(64)),
+                                    bias=True)),
+                ('bn2', SwitchNorm(64)),
                 ('relu2', nn.ReLU(inplace=True)),
                 ('conv3', nn.Conv2d(64, inplanes, 3, stride=1, padding=1,
-                                    bias=False)),
-                ('bn3', nn.BatchNorm(inplanes)),
+                                    bias=True)),
+                ('bn3', SwitchNorm(inplanes)),
                 ('relu3', nn.ReLU(inplace=True)),
             ]
         else:
             layer0_modules = [
                 ('conv1', nn.Conv2d(3, inplanes, kernel_size=7, stride=2,
-                                    padding=3, bias=False)),
-                ('bn1', nn.BatchNorm(inplanes)),
+                                    padding=3, bias=True)),
+                ('bn1', SwitchNorm(inplanes)),
                 ('relu1', nn.ReLU(inplace=True)),
             ]
         # To preserve compatibility with Caffe weights `ceil_mode=True`
@@ -338,8 +338,8 @@ class SENet(nn.Module):
             downsample = nn.Sequential(
                 nn.Conv2d(self.inplanes, planes * block.expansion,
                           kernel_size=downsample_kernel_size, stride=stride,
-                          padding=downsample_padding, bias=False),
-               nn.BatchNorm(planes * block.expansion),
+                          padding=downsample_padding, bias=True),
+               SwitchNorm(planes * block.expansion),
             )
 
         layers = []
